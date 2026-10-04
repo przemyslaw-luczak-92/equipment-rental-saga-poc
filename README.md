@@ -19,6 +19,79 @@ Projekt demonstruje:
 
 Projekt nie obiecuje ogólnego `exactly-once`. Zakłada możliwość ponownego dostarczenia wiadomości i chroni skutki biznesowe przed duplikacją.
 
+## Dlaczego Eventuate Tram?
+
+Najtrudniejszym problemem w tym projekcie nie jest samo wysłanie wiadomości
+przez RabbitMQ. Problemem jest niezawodne połączenie lokalnych transakcji
+bazodanowych z komunikacją asynchroniczną oraz utrzymanie stanu procesu,
+który obejmuje kilka mikroserwisów.
+
+Eventuate Tram dostarcza gotowe mechanizmy potrzebne do rozwiązania tego
+problemu:
+
+- transactional outbox, dzięki któremu zmiana biznesowa i wiadomość są
+  zapisywane w tej samej lokalnej transakcji;
+- integrację z CDC, które odczytuje zatwierdzone wiadomości z outboxa
+  i publikuje je do RabbitMQ;
+- model komunikacji oparty na komendach i odpowiedziach;
+- routing komend do odpowiednich kanałów i handlerów;
+- korelację odpowiedzi z właściwą instancją sagi;
+- trwały zapis stanu sagi w bazie danych;
+- kontynuowanie procesu po restarcie aplikacji;
+- deklarowanie kolejnych kroków oraz kompensacji za pomocą Saga DSL;
+- techniczną deduplikację ponownie dostarczonej wiadomości na podstawie
+  jej `messageId`.
+
+Dzięki temu kod projektu może koncentrować się przede wszystkim na logice
+biznesowej:
+
+- kiedy zarezerwować sprzęt;
+- kiedy potwierdzić booking;
+- kiedy zwolnić wcześniej zarezerwowany stan;
+- z jakiego powodu odrzucić booking.
+
+Bez Eventuate Tram musielibyśmy samodzielnie przygotować między innymi:
+
+- strukturę tabeli outbox;
+- kod zapisujący wiadomości w tej samej transakcji co dane biznesowe;
+- proces odczytujący outbox i publikujący wiadomości do RabbitMQ;
+- format komend, odpowiedzi i nagłówków korelacyjnych;
+- dispatchery kierujące wiadomości do właściwych handlerów;
+- mechanizm przechowywania aktualnego kroku sagi;
+- obsługę odpowiedzi sukcesu i błędów biznesowych;
+- uruchamianie kompensacji w odwrotnej kolejności;
+- odtwarzanie procesu po restarcie;
+- techniczną deduplikację wiadomości;
+- znaczną część obsługi ponowień, blokad i sytuacji częściowej awarii.
+
+| Obszar | Z Eventuate Tram | Bez Eventuate Tram |
+|---|---|---|
+| Outbox | Gotowa integracja z lokalną transakcją | Własna tabela i kod zapisu |
+| Publikowanie wiadomości | CDC odczytuje outbox | Własny publisher lub polling worker |
+| Komendy i odpowiedzi | Gotowy model oraz dispatchery | Własny format, routing i korelacja |
+| Stan sagi | Trwale przechowywany przez framework | Własna maszyna stanów i tabele |
+| Kompensacje | Deklarowane w definicji sagi | Własny mechanizm wyboru i kolejności |
+| Restart aplikacji | Saga może kontynuować proces | Własne odtwarzanie niedokończonych procesów |
+| Duplikaty wiadomości | Techniczna deduplikacja `messageId` | Własna tabela i logika deduplikacji |
+
+Eventuate Tram nie usuwa jednak odpowiedzialności z kodu biznesowego.
+Framework nie zdecyduje za nas:
+
+- jakie kroki powinien zawierać proces;
+- co jest błędem biznesowym, a co technicznym;
+- jak powinna wyglądać kompensacja;
+- jakie reguły obowiązują w domenie;
+- jak zabezpieczyć skutki biznesowe przed powtórzeniami.
+
+Nie daje również ogólnej gwarancji `exactly-once`. Wiadomość może zostać
+dostarczona ponownie, dlatego nadal potrzebujemy idempotentnych operacji,
+takich jak `InventoryHold`, stabilne stany domenowe i blokady
+pesymistyczne.
+
+W tym POC Eventuate Tram pełni więc rolę infrastrukturalnego silnika
+niezawodnej komunikacji i orkiestracji, natomiast decyzje biznesowe
+pozostają w naszych klasach domenowych i serwisach aplikacyjnych.
+
 ## Moduły
 
 ```text
