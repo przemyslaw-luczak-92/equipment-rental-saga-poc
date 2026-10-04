@@ -1,0 +1,29 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: booking-service
+  datasource:
+    url: jdbc:postgresql://localhost:5433/booking
+    username: booking
+    password: booking
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+
+rabbitmq:
+  broker:
+    addresses: localhost:5672
+
+eventuate:
+  rabbitmq:
+    partition:
+      count: 2
+
+eventuatelocal:
+  zookeeper:
+    connection:
+      string: localhost:2181

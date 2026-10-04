@@ -1,0 +1,62 @@
+openapi: 3.0.3
+
+info:
+  title: Equipment Rental Inventory API
+  version: 1.0.0
+  description: Minimal REST contract for the inventory service POC.
+
+tags:
+  - name: Equipment
+    description: Equipment availability operations
+
+paths:
+  /equipment/{equipmentId}:
+    get:
+      tags:
+        - Equipment
+      operationId: getEquipment
+      summary: Get the current equipment availability
+
+      parameters:
+        - name: equipmentId
+          in: path
+          required: true
+          schema:
+            type: string
+
+      responses:
+        '200':
+          description: Current equipment availability
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EquipmentResponse'
+
+        '404':
+          description: Equipment not found
+
+components:
+  schemas:
+    EquipmentResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - equipmentId
+        - total
+        - held
+        - available
+      properties:
+        equipmentId:
+          type: string
+        total:
+          type: integer
+          format: int32
+          minimum: 0
+        held:
+          type: integer
+          format: int32
+          minimum: 0
+        available:
+          type: integer
+          format: int32
+          minimum: 0

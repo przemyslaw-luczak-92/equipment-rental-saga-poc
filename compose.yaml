@@ -1,0 +1,110 @@
+services:
+  booking-db:
+    image: eventuateio/eventuate-postgres:0.21.0.RELEASE
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: booking
+      POSTGRES_USER: booking
+      POSTGRES_PASSWORD: booking
+      USE_DB_ID: "false"
+      USE_JSON_PAYLOAD_AND_HEADERS: "false"
+    volumes:
+      - booking-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U booking -d booking"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  inventory-db:
+    image: eventuateio/eventuate-postgres:0.21.0.RELEASE
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_DB: inventory
+      POSTGRES_USER: inventory
+      POSTGRES_PASSWORD: inventory
+      USE_DB_ID: "false"
+      USE_JSON_PAYLOAD_AND_HEADERS: "false"
+    volumes:
+      - inventory-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inventory -d inventory"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:4.1.8-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    command:
+      - sh
+      - -c
+      - rabbitmq-plugins enable --offline rabbitmq_consistent_hash_exchange && rabbitmq-server
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  zookeeper:
+    image: zookeeper:3.9.5
+    ports:
+      - "2181:2181"
+    healthcheck:
+      test: ["CMD-SHELL", "zkServer.sh status"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  cdc:
+    image: eventuateio/eventuate-cdc-service:0.19.0.RELEASE
+    ports:
+      - "8099:8080"
+    depends_on:
+      booking-db:
+        condition: service_healthy
+      inventory-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      zookeeper:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: EventuatePolling,RabbitMQ,Postgres
+      EVENTUATELOCAL_ZOOKEEPER_CONNECTION_STRING: zookeeper:2181
+      RABBITMQ_BROKER_ADDRESSES: rabbitmq
+      EVENTUATE_RABBITMQ_PARTITION_COUNT: "2"
+      LOGGING_LEVEL_ROOT: INFO
+
+      EVENTUATE_CDC_READER_BOOKING_TYPE: polling
+      EVENTUATE_CDC_READER_BOOKING_DATASOURCEURL: jdbc:postgresql://booking-db:5432/booking
+      EVENTUATE_CDC_READER_BOOKING_DATASOURCEUSERNAME: booking
+      EVENTUATE_CDC_READER_BOOKING_DATASOURCEPASSWORD: booking
+      EVENTUATE_CDC_READER_BOOKING_DATASOURCEDRIVERCLASSNAME: org.postgresql.Driver
+      EVENTUATE_CDC_READER_BOOKING_LEADERSHIPLOCKPATH: /eventuate/cdc/leader/booking
+      EVENTUATE_CDC_READER_BOOKING_OUTBOXID: "1"
+
+      EVENTUATE_CDC_PIPELINE_BOOKING_TYPE: eventuate-tram
+      EVENTUATE_CDC_PIPELINE_BOOKING_READER: BOOKING
+
+      EVENTUATE_CDC_READER_INVENTORY_TYPE: polling
+      EVENTUATE_CDC_READER_INVENTORY_DATASOURCEURL: jdbc:postgresql://inventory-db:5432/inventory
+      EVENTUATE_CDC_READER_INVENTORY_DATASOURCEUSERNAME: inventory
+      EVENTUATE_CDC_READER_INVENTORY_DATASOURCEPASSWORD: inventory
+      EVENTUATE_CDC_READER_INVENTORY_DATASOURCEDRIVERCLASSNAME: org.postgresql.Driver
+      EVENTUATE_CDC_READER_INVENTORY_LEADERSHIPLOCKPATH: /eventuate/cdc/leader/inventory
+      EVENTUATE_CDC_READER_INVENTORY_OUTBOXID: "2"
+
+      EVENTUATE_CDC_PIPELINE_INVENTORY_TYPE: eventuate-tram
+      EVENTUATE_CDC_PIPELINE_INVENTORY_READER: INVENTORY
+
+volumes:
+  booking-db-data:
+  inventory-db-data:
+  rabbitmq-data:
